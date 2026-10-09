@@ -138,6 +138,8 @@ h1, h2, h3 { margin: 0; font-weight: 600; }
 .detalhes dt { font-size: .85rem; color: var(--tinta-suave); }
 .detalhes dd { margin: .1rem 0 0; font-weight: 500; font-variant-numeric: tabular-nums; }
 .detalhes .offline { color: var(--erro); }
+.cronometro { font-size: 1.25rem; font-weight: 600; }
+.cronometro.atrasada { color: var(--erro); }
 
 /* blocos */
 .bloco { padding: 1.75rem 0; border-bottom: 1px solid var(--linha); }
