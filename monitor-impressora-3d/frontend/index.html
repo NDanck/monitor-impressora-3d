@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Monitor de impressoras 3D</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖨️</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topo">
+    <h1>Monitor de impressoras 3D</h1>
+    <p id="conexao" class="conexao" role="status" aria-live="polite">Conectando ao backend</p>
+  </header>
+
+  <nav id="abas" class="abas" aria-label="Impressoras"></nav>
+
+  <main id="painel" hidden>
+    <section class="estado" aria-labelledby="nome-equip">
+      <h2 id="nome-equip" class="nome-equip"></h2>
+      <div class="leitura">
+        <p id="estado-texto" class="estado-texto" aria-live="polite"></p>
+        <p id="temperatura" class="temperatura"></p>
+      </div>
+      <dl class="detalhes">
+        <div><dt>Estado desde</dt><dd id="desde">—</dd></div>
+        <div><dt>Última leitura</dt><dd id="ultima-leitura">—</dd></div>
+        <div><dt>Dispositivo</dt><dd id="online">—</dd></div>
+        <div><dt>Limiares</dt><dd id="limiares">—</dd></div>
+      </dl>
+    </section>
+
+    <section class="bloco" aria-labelledby="t-linha">
+      <div class="cabecalho-bloco">
+        <h3 id="t-linha">Linha do tempo</h3>
+        <div class="janelas" role="group" aria-label="Período da linha do tempo">
+          <button type="button" data-horas="1" aria-pressed="true">1 h</button>
+          <button type="button" data-horas="6" aria-pressed="false">6 h</button>
+          <button type="button" data-horas="24" aria-pressed="false">24 h</button>
+        </div>
+      </div>
+      <div id="faixa" class="faixa" role="img" aria-label="Linha do tempo de estado da impressora"></div>
+      <div id="faixa-marcas" class="faixa-marcas" aria-hidden="true"></div>
+      <ul class="legenda">
+        <li><span class="amostra amostra-ligada"></span>Ligada</li>
+        <li><span class="amostra amostra-desligada"></span>Desligada</li>
+        <li><span class="amostra amostra-vazia"></span>Sem registro</li>
+      </ul>
+    </section>
+
+    <section class="bloco" aria-labelledby="t-grafico">
+      <h3 id="t-grafico">Tempo ligada e desligada por dia</h3>
+      <div class="grafico"><canvas id="grafico" aria-label="Gráfico de tempo ligada e desligada nos últimos 7 dias"></canvas></div>
+    </section>
+
+    <section class="bloco duas-colunas">
+      <div>
+        <h3 id="t-historico">Histórico de transições</h3>
+        <div class="tabela-rolagem">
+          <table aria-labelledby="t-historico">
+            <thead><tr><th scope="col">Data e hora</th><th scope="col">Estado</th><th scope="col">Temperatura</th></tr></thead>
+            <tbody id="historico"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div>
+        <h3>Comandos para o dispositivo</h3>
+        <p class="ajuda">Enviados pelo backend ao ESP32 via MQTT.</p>
+        <div class="comandos">
+          <button type="button" data-acao="led_on">Acender LED</button>
+          <button type="button" data-acao="led_off">Apagar LED</button>
+          <button type="button" data-acao="read_now">Ler agora</button>
+        </div>
+        <div class="intervalo">
+          <label for="intervalo">Intervalo de coleta (segundos)</label>
+          <div class="intervalo-linha">
+            <input id="intervalo" type="number" min="1" step="1" value="10" inputmode="numeric">
+            <button type="button" id="aplicar-intervalo">Aplicar intervalo</button>
+          </div>
+        </div>
+        <p id="retorno-comando" class="retorno" role="status" aria-live="polite"></p>
+      </div>
+    </section>
+  </main>
+
+  <section id="vazio" class="vazio" hidden>
+    <p>Nenhuma impressora enviou dados ainda. Inicie o sensor ou o simulador para que ela apareça aqui.</p>
+  </section>
+
+  <script src="config.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

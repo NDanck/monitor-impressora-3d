@@ -1,0 +1,44 @@
+# Execucao LOCAL do backend + PostgreSQL (alternativa a hospedagem em nuvem).
+# O broker e o HiveMQ Cloud: nao ha servico MQTT neste compose.
+# Credenciais MQTT vem de backend/.env (MQTT_HOST, MQTT_USER, MQTT_PASS).
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: postgres-iot
+    environment:
+      POSTGRES_DB: iot
+      POSTGRES_USER: iot
+      POSTGRES_PASSWORD: iot
+    volumes:
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U iot -d iot"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: ./backend
+    container_name: backend-iot
+    env_file: ./backend/.env
+    environment:
+      # sobrescreve o banco do .env para usar o postgres deste compose
+      DATABASE_URL: ""
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: iot
+      DB_USER: iot
+      DB_PASS: iot
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
