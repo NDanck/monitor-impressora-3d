@@ -4,7 +4,8 @@ Backend IoT - monitoramento de estado de impressora 3D.
 - Assina a telemetria de temperatura via MQTT (HiveMQ Cloud, TLS 8883).
 - Aplica histerese: liga acima de TEMP_LIGA, desliga abaixo de TEMP_DESLIGA.
 - Grava no PostgreSQL apenas as transicoes de estado.
-- Publica o status (consumido pelo bot Discord) e comandos para o dispositivo.
+- Publica o status via MQTT e avisa o Discord via webhook.
+- Envia comandos para o dispositivo (Cloud -> Edge).
 - Expoe API REST para o dashboard.
 
 Executar com 1 worker apenas: o estado em memoria e a assinatura MQTT
@@ -14,6 +15,7 @@ import os
 import json
 import time
 import threading
+import urllib.request
 from contextlib import asynccontextmanager, closing
 from datetime import datetime, timedelta, timezone, time as dtime
 from typing import Optional
@@ -58,6 +60,7 @@ DB_CONFIG = {
 
 CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",")]
 TZ_LOCAL = ZoneInfo(os.getenv("TZ_LOCAL", "America/Sao_Paulo"))
+DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 
 ACOES_VALIDAS = {"led_on", "led_off", "read_now", "set_interval"}
 
@@ -145,6 +148,32 @@ def publicar(topic: str, payload: dict):
     print(f"[PUB] {topic} -> {payload}")
 
 
+def notificar_discord(equip_id: str, ligado: bool, temperatura: float, ts: datetime):
+    """Envia o aviso de transicao ao canal do Discord via webhook (thread separada)."""
+    if not DISCORD_WEBHOOK_URL:
+        return
+    data_hora = ts.astimezone(TZ_LOCAL).strftime("%d/%m/%Y %H:%M:%S")
+    texto = (
+        f"{data_hora} - {equip_id.upper()} "
+        f"{'LIGADO' if ligado else 'DESLIGADO'} ({temperatura:.1f} °C)"
+    )
+
+    def enviar():
+        try:
+            req = urllib.request.Request(
+                DISCORD_WEBHOOK_URL,
+                data=json.dumps({"content": texto}).encode(),
+                headers={"Content-Type": "application/json", "User-Agent": "monitor-impressoras"},
+                method="POST",
+            )
+            urllib.request.urlopen(req, timeout=10)
+            print(f"[DISCORD] {texto}")
+        except Exception as e:
+            print(f"[DISCORD] Falha: {e}")
+
+    threading.Thread(target=enviar, daemon=True).start()
+
+
 def processar_leitura(equip_id: str, temperatura: float):
     """
     Histerese:
@@ -181,6 +210,7 @@ def processar_leitura(equip_id: str, temperatura: float):
             "timestamp": ts.isoformat(),
         },
     )
+    notificar_discord(equip_id, novo, temperatura, ts)
     # Cloud -> Edge: LED do dispositivo reflete o estado calculado na nuvem
     publicar(
         TOPIC_COMANDO.format(equip_id=equip_id),
@@ -327,6 +357,9 @@ def estado():
                 "desde": por_id.get(equip_id, {}).get("desde"),
                 "temperatura": leitura["temperatura"] if leitura else None,
                 "ultima_leitura_em": leitura["recebido_em"].isoformat() if leitura else None,
+                "segundos_desde_leitura": (
+                    round((agora - leitura["recebido_em"]).total_seconds(), 1) if leitura else None
+                ),
                 "online": online,
             }
         )
