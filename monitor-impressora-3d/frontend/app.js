@@ -4,7 +4,8 @@
   // URL da API: ?api=... na barra de endereço tem prioridade sobre config.js
   const params = new URLSearchParams(location.search);
   const API = (params.get("api") || window.API_URL || "http://localhost:8000").replace(/\/+$/, "");
-  const ATUALIZACAO_MS = 5000;
+  const ATUALIZACAO_MS = 5000;      // histórico, gráfico e linha do tempo
+  const ATUALIZACAO_ESTADO_MS = 2000; // estado e cronômetro
 
   const $ = (id) => document.getElementById(id);
   const fmtDataHora = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "medium" });
@@ -16,6 +17,7 @@
   let config = null;
   let grafico = null;
   let horasFaixa = 1;
+  let baseLeitura = null;   // instante local (ms) equivalente à última leitura
 
   document.querySelectorAll("[data-horas]").forEach((b) =>
     b.addEventListener("click", () => {
@@ -42,13 +44,6 @@
     el.classList.toggle("falha", !ok);
   }
 
-  function tempoRelativo(iso) {
-    const s = Math.max(0, Math.round((Date.now() - new Date(iso)) / 1000));
-    if (s < 60) return `há ${s} s`;
-    if (s < 3600) return `há ${Math.floor(s / 60)} min`;
-    if (s < 86400) return `há ${Math.floor(s / 3600)} h`;
-    return `há ${Math.floor(s / 86400)} dias`;
-  }
 
   function cor(nome) {
     return getComputedStyle(document.documentElement).getPropertyValue(nome).trim();
@@ -80,7 +75,9 @@
 
     $("temperatura").textContent = e.temperatura != null ? `${fmtTemp.format(e.temperatura)} °C` : "";
     $("desde").textContent = e.desde ? fmtDataHora.format(new Date(e.desde)) : "—";
-    $("ultima-leitura").textContent = e.ultima_leitura_em ? tempoRelativo(e.ultima_leitura_em) : "Nenhuma desde o início do backend";
+    // segundos calculados no servidor: o cronômetro não depende do relógio do navegador
+    baseLeitura = e.segundos_desde_leitura != null ? Date.now() - e.segundos_desde_leitura * 1000 : null;
+    atualizarCronometro();
 
     const online = $("online");
     online.textContent = e.online ? "Online" : "Offline";
@@ -90,6 +87,36 @@
       $("limiares").textContent =
         `Liga acima de ${fmtTemp.format(config.temp_liga)} °C, desliga abaixo de ${fmtTemp.format(config.temp_desliga)} °C`;
     }
+  }
+
+  // ------------------------------------------------------------ cronômetro
+  function formatarDuracao(seg) {
+    const h = Math.floor(seg / 3600);
+    const m = Math.floor((seg % 3600) / 60);
+    const s = seg % 60;
+    const mmss = `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    return h > 0 ? `${h}:${mmss}` : mmss;
+  }
+
+  function atualizarCronometro() {
+    const el = $("ultima-leitura");
+    if (baseLeitura == null) {
+      el.textContent = "Aguardando leitura";
+      el.classList.remove("atrasada");
+      return;
+    }
+    const seg = Math.max(0, Math.floor((Date.now() - baseLeitura) / 1000));
+    el.textContent = formatarDuracao(seg);
+    el.classList.toggle("atrasada", !!config && seg > 2 * config.intervalo_esperado_s);
+  }
+
+  async function atualizarEstado() {
+    if (!equipSelecionado) return;
+    try {
+      const lista = await api("/api/estado");
+      const e = lista.find((x) => x.equipamento_id === equipSelecionado);
+      if (e) renderEstado(e);
+    } catch { /* falha reportada pelo ciclo principal */ }
   }
 
   // ------------------------------------------------------------ faixa 24h
@@ -274,4 +301,6 @@
 
   atualizar();
   setInterval(atualizar, ATUALIZACAO_MS);
+  setInterval(atualizarEstado, ATUALIZACAO_ESTADO_MS);
+  setInterval(atualizarCronometro, 1000);
 })();
